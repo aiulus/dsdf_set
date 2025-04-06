@@ -378,6 +378,46 @@ function sys = systemsDDSF(sys_type)
     sys.config = validate_config(run_config, A, C);  % Perform checks on adherence to assumptions
 
     sys.S_f = setEquilibriaDDSF(sys); % Populate the terminal safe set
+
+    % === Add Control System Toolbox model ===
+    sys.ss_object = ss(A, B, C, D);
+    
+    % === Convert to CORA zonotopes if CORA is available ===
+    try
+        n = size(A, 1);
+        m = size(B, 2);
+        p = size(C, 1);
+    
+        % Initial condition set
+        x0 = sys.params.x_ini;
+        if isempty(x0)
+            x0 = zeros(n, 1);
+        end
+        sys.X0 = zonotope(x0, 0.01 * eye(n)); % Small uncertainty ball
+    
+        % Input constraints as zonotope
+        umin = sys.params.u_min;
+        umax = sys.params.u_max;
+        u_center = (umin + umax) / 2;
+        u_generators = diag((umax - umin) / 2);
+        sys.constraints.U_zono = zonotope(u_center, u_generators);
+    
+        % Output constraints as zonotope
+        ymin = sys.params.y_min;
+        ymax = sys.params.y_max;
+        y_center = (ymin + ymax) / 2;
+        y_generators = diag((ymax - ymin) / 2);
+        sys.constraints.Y_zono = zonotope(y_center, y_generators);
+    
+        % Terminal safe set as zonotope
+        if isfield(sys.S_f, "trivial_solution") && isfield(sys.S_f.trivial_solution, "x_e")
+            x_eq = sys.S_f.trivial_solution.x_e;
+            sys.S_f_zono = zonotope(x_eq, 1e-3 * eye(n));
+        end
+    catch ME
+        fprintf('Zonotope conversion skipped: %s', ME.message);
+    end
+
 end
     
 function config = validate_config(config, A, C)
