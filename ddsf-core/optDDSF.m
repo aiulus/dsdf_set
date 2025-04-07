@@ -173,8 +173,10 @@ end
 
 function C = zonoContains(Z, x)
     % Zonotope Z: Z = [c | G]
-    G = Z.Z(:, 2:end);  % Generators
-    c = Z.Z(:, 1);      % Center
+    %G = Z.Z(:, 2:end);  % Generators
+    %c = Z.Z(:, 1);      % Center
+    G = Z.G;
+    c = Z.c;
     n_gen = size(G, 2);
     alpha = sdpvar(n_gen, 1);
     C = [G * alpha + c == x, norm(alpha, Inf) <= 1];

@@ -1,9 +1,6 @@
 function [lookup, time, logs] = runDDSF(systype, T_sim, N, T_ini, scale_constraints, R, toggle_plot)
+    if nargin < 7, toggle_plot = 0; end
     toggle_save = true;
-
-    if nargin < 7
-        toggle_plot = 0;
-    end
 
     % Input signal generation options:
     % {'prbs', 'sinusoid', 'sinusoidal_sweep', 'uniform', 
@@ -39,6 +36,10 @@ function [lookup, time, logs] = runDDSF(systype, T_sim, N, T_ini, scale_constrai
                         'R', 1 ...
                        );
     
+    uncertainty_options = struct( ...
+        'x0_mode', 'single' ... % Options - {'single', 'sample', 'set'}
+        );
+
     if ismember(systype, {'test_nonlinear', 'van_der_pol', 'nonlinear_pendulum'})
         sys = nonlinearSysInit(systype);
     else
@@ -51,6 +52,7 @@ function [lookup, time, logs] = runDDSF(systype, T_sim, N, T_ini, scale_constrai
     if scale_constraints ~= -1
         sys.constraints.U = updateBounds(sys.constraints.U, scale_constraints);
         sys.constraints.Y = updateBounds(sys.constraints.Y, scale_constraints);
+        sys = system2set(sys);
     end
 
     % Match T_ini, N to default values if not specified in the input
@@ -76,7 +78,8 @@ function [lookup, time, logs] = runDDSF(systype, T_sim, N, T_ini, scale_constrai
                     'IO_params', IO_params, ...
                     'T_sim', run_options.T_sim, ...
                     'data_options', data_options, ...
-                    'T_d', run_options.T_d ...
+                    'T_d', run_options.T_d, ...
+                    'uncertainty_options', uncertainty_options ...
                     );
 
     lookup.config.N = N;
@@ -86,7 +89,10 @@ function [lookup, time, logs] = runDDSF(systype, T_sim, N, T_ini, scale_constrai
     lookup.sys.config.T_ini = T_ini;    
 
     %% Step 2: Generate data & Hankel matrices
-    [u_d, y_d, ~, ~, ~] = gendataDDSF(lookup); 
+    % [u_d, y_d, ~, ~, ~] = gendataDDSF(lookup); uses the old version
+    data = genDataExtended(lookup);
+    u_d = data.u_d;
+    y_d = data.y_d;
     
     [H_u, H_y] = hankelDDSF(u_d, y_d, lookup);
     
@@ -110,9 +116,9 @@ function [lookup, time, logs] = runDDSF(systype, T_sim, N, T_ini, scale_constrai
             'ul_t', zeros(dims.m, T_sim), ...
             'loss', zeros(2, T_ini + T_sim) ...
         );
+
+    validateLookup(lookup);
     
-    % Obtain an L-step random control policy
-    T_d = run_options.T_d;
     %% Step 3: Receding Horizon Loop
     for t=(T_ini + 1):(T_ini + T_sim)
         fprintf("----------------- DEBUG Information -----------------\n");
