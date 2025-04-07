@@ -280,12 +280,13 @@ function sys = systemsDDSF(sys_type)
                 'L', 1, ... % Length of the beam [m]
                 'J', 9.99e-6, ... % Ball's moment of inertia [kg*m^2]
                 'g', 9.8, ... % Gravitational constant [m/s^2]
-                'x_ini', 0, ... % Initial ball position
+                'x_ini', [0; 0], ... % Initial ball position
                 'target', 0.5, ... % Desired ball position
                 'u_min', -10, ... % Minimum gear angle
                 'u_max', 10, ...  % Maximum gear angle
                 'y_min', 0, ...
-                'y_max', 1 ... % Must be the same as L
+                'y_max', 1, ... % Must be the same as L
+                'dt', 0.1 ... % Sampling time [s]
                 );
     
             b21 = - (params.m * params.g * params.d) /(params.L * ...
@@ -382,7 +383,7 @@ function sys = systemsDDSF(sys_type)
     % === Add Control System Toolbox model ===
     sys.ss_object = ss(A, B, C, D);
     
-    % === Convert to CORA zonotopes if CORA is available ===
+    % === Convert to CORA zonotopes ===
     try
         n = size(A, 1);
         m = size(B, 2);
@@ -390,29 +391,32 @@ function sys = systemsDDSF(sys_type)
     
         % Initial condition set
         x0 = sys.params.x_ini;
-        if isempty(x0)
-            x0 = zeros(n, 1);
+        if isempty(x0) || any(isnan(x0)) || any(isinf(x0))
+            x0 = zeros(n, 1); % default
         end
-        sys.X0 = zonotope(x0, 0.01 * eye(n)); % Small uncertainty ball
+        x0 = double(x0);
+        if isrow(x0), x0 = x0'; end
+
+        %% TODO: add epsilon to global parameters
+        epsilon = 0.01;
+        sys.sets.X0 = safeZonotope(x0, epsilon * eye(n)); % Small uncertainty ball
     
-        % Input constraints as zonotope
-        umin = sys.params.u_min;
-        umax = sys.params.u_max;
-        u_center = (umin + umax) / 2;
-        u_generators = diag((umax - umin) / 2);
-        sys.constraints.U_zono = zonotope(u_center, u_generators);
+        %% Input/Output Constraints
+        umin = double(sys.params.u_min(:));
+        umax = double(sys.params.u_max(:));
+        ymin = double(sys.params.y_min(:));
+        ymax = double(sys.params.y_max(:));
     
-        % Output constraints as zonotope
-        ymin = sys.params.y_min;
-        ymax = sys.params.y_max;
-        y_center = (ymin + ymax) / 2;
-        y_generators = diag((ymax - ymin) / 2);
-        sys.constraints.Y_zono = zonotope(y_center, y_generators);
-    
+        sys.sets.constraints.U = zonotope(interval(umin, umax));
+        sys.sets.constraints.Y = zonotope(interval(ymin, ymax));
+
         % Terminal safe set as zonotope
-        if isfield(sys.S_f, "trivial_solution") && isfield(sys.S_f.trivial_solution, "x_e")
-            x_eq = sys.S_f.trivial_solution.x_e;
-            sys.S_f_zono = zonotope(x_eq, 1e-3 * eye(n));
+        if isfield(sys.S_f, "trivial_solution")
+            x_eq = double(sys.S_f.trivial_solution.x_e(:));
+            if isrow(x_eq), x_eq = x_eq'; end
+            if isnumeric(x_eq)
+                sys.sets.S_f_zono = safeZonotope(x_eq, 1e-3 * eye(n));
+            end
         end
     catch ME
         fprintf('Zonotope conversion skipped: %s', ME.message);
