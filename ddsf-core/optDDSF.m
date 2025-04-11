@@ -127,7 +127,7 @@ function [u_opt, y_opt] = optDDSF(lookup, u_l, traj_ini)
 
     % === Terminal constraint)
     y_terminal = control_y(:, L - T_ini + 1);
-    constraints = [constraints, zonoContains(lookup.sys.sets.S_f_zono, y_terminal)];
+    %constraints = [constraints, zonoContains(lookup.sys.sets.S_f_zono, y_terminal)];
 
     % === Solve QP
     switch opt_params.solver_type
