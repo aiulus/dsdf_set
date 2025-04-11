@@ -1,4 +1,4 @@
-function [u_opt, y_opt] = optDDSF(lookup, u_l, traj_ini)
+function [u_opt, y_opt] = setOptDDSF(lookup, u_l, traj_ini)
     % reg_params.reg_mode   -   OPTIONS
     %                       - 'fro': Uses Frobenius norm + Tikhonov
     %                                regularization on the Hankel matrix
